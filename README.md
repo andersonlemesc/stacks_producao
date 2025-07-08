@@ -338,5 +338,5 @@ Contribuições são bem-vindas! Por favor:
 ---
 
 **🚀 Desenvolvido por Anderson Lemes**  
-**📺 YouTube**: [Seu Canal]  
-**💼 LinkedIn**: [Seu Perfil]
+**📺 YouTube**: [AndersonLemes](https://www.youtube.com/@andersonslemes) 
+**💼 LinkedIn**: [AndersonLemes](https://www.linkedin.com/in/anderson-lemes-713335250/)
