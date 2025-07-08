@@ -1,0 +1,149 @@
+version: "3.8"
+
+services:
+  n8n_worker:
+    image: n8nio/n8n:1.101.1
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    command: worker --concurrency=10
+    
+    networks:
+      - app_network        # Conecta com PostgreSQL/Redis APENAS
+      # Worker NÃO precisa de traefik_public (não é exposto)
+    
+    volumes:
+      # Compartilha dados com o editor
+      - n8n_data:/home/node/.n8n
+      - n8n_files:/files
+    
+    environment:
+      
+      # Configurações Gerais do N8N - MESMAS DO EDITOR
+      
+      - N8N_ENCRYPTION_KEY=KRpMlPWMnUPpJ4Ehy6sHuYYweuLes4RT
+      - NODE_ENV=production
+      - N8N_LOG_LEVEL=info
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - N8N_RUNNERS_ENABLED=true
+      
+      
+      # Configuração do Banco de Dados - MESMAS DO EDITOR
+      
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=n8n_database
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=app_user
+      - DB_POSTGRESDB_PASSWORD=4hwM-An0+14dC=z
+      
+      
+      # Configuração do Redis - MESMAS DO EDITOR
+      
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_DB=2
+      - QUEUE_BULL_REDIS_PASSWORD=1H9PvFRv1BAc
+      
+      
+      # Configurações específicas para Worker
+      
+      - N8N_WORKER_CONCURRENCY=10         # 10 jobs simultâneos por worker
+      - EXECUTIONS_TIMEOUT=1800            # 30 minutos para execuções
+      - EXECUTIONS_TIMEOUT_MAX=7200        # 2 horas máximo para jobs complexos
+      
+      
+      # Configurações de Performance para Worker
+      
+      - N8N_PAYLOAD_SIZE_MAX=32            # Workers processam dados menores
+      - NODE_OPTIONS=--max-old-space-size=2048  # 2GB heap para Node.js
+      
+      
+      # Bibliotecas - MESMAS DO EDITOR
+      
+      - NODE_FUNCTION_ALLOW_BUILTIN=*
+      - NODE_FUNCTION_ALLOW_EXTERNAL=lodash,moment,axios
+      - N8N_COMMUNITY_PACKAGES_ENABLED=true
+      
+      
+      # Configurações de Worker específicas
+      
+      - N8N_WORKERS_ENABLED=true
+      - N8N_WORKERS_MAX_PAYLOAD=16         # Limite de payload por job
+
+       # E-mail (Multi-user) - CONFIGURE SMTP
+      
+      - N8N_EMAIL_MODE=smtp
+      - N8N_SMTP_HOST=smtp.gmail.com
+      - N8N_SMTP_PORT=587
+      - N8N_SMTP_USER=seuemail@gmail.com
+      - N8N_SMTP_PASS=edmoauhradsarvmw
+      - N8N_SMTP_SENDER=seuemail@gmail.com
+      - N8N_SMTP_SSL=true
+      - N8N_SMTP_SECURE=true
+    
+    deploy:
+      mode: replicated
+      replicas: 2                          # 2 workers para balanceamento
+      
+      placement:
+        constraints:
+          - node.role == manager
+          # Opcional: distribuir workers em nós diferentes
+          # - node.labels.worker == true
+      
+      resources:
+        limits:
+          cpus: "2.0"                      # Workers precisam mais CPU
+          memory: 2048M                    # Mais memória para processamento
+        #reservations:
+          #cpus: "1.0"                      # CPU garantida
+          #memory: 1024M                    # Memória garantida
+      
+      # Workers NÃO precisam de labels Traefik (serviço interno)
+      # labels: {} # Vazio - workers não são expostos
+      
+      update_config:
+        parallelism: 1                     # Atualiza um worker por vez
+        delay: 30s
+        order: start-first                 # Para não perder jobs em execução
+        failure_action: rollback
+        monitor: 60s
+      
+      restart_policy:
+        condition: on-failure
+        delay: 15s                         # Restart mais rápido para workers
+        max_attempts: 5                    # Mais tentativas (workers são críticos)
+        window: 300s                       # Janela maior (5 minutos)
+    
+    # Healthcheck específico para workers
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep '[n]ode.*worker' || exit 1"]
+      interval: 30s                        # Verifica se processo worker está rodando
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Configurações de sistema (comentadas - usar apenas se necessário)
+    # sysctls:
+      # Otimizações para processamento intensivo
+      # - net.core.rmem_max=134217728
+      # - net.core.wmem_max=134217728
+    
+    # ulimits:
+      # Limits para workers intensivos (comentados - usar apenas se necessário)
+      # nofile:
+        # soft: 65536
+        # hard: 65536
+      # nproc:
+        # soft: 32768
+        # hard: 32768
+
+networks:
+  app_network:
+    external: true
+
+volumes:
+  n8n_data:
+    driver: local  
+  n8n_files: 
+    driver: local

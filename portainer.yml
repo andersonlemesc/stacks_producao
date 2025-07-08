@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  agent:
+    image: portainer/agent:lts
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    networks:
+      - agent_network
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.platform.os == linux]
+
+  portainer:
+    image: portainer/portainer-ce:lts
+    command: -H tcp://tasks.agent:9001 --tlsskipverify
+    volumes:
+      - portainer_data:/data
+    ports:
+      #- "9000:9000"  # Descomente para acesso direto HTTP
+       - "9443:9443"  # Descomente para acesso direto HTTPS
+    networks:
+      - traefik_public
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      #labels:
+        # Versão simplificada (aproveita redirect global do Traefik)
+        #- traefik.enable=true
+        #- traefik.swarm.network=traefik_public
+        #- traefik.http.routers.portainer.rule=Host(`painel.seudominio.com`)
+        #- traefik.http.routers.portainer.entrypoints=websecure
+        #- traefik.http.routers.portainer.tls.certresolver=letsencrypt
+        #- traefik.http.services.portainer.loadbalancer.server.port=9000
+
+networks:
+  traefik_public:
+    external: true
+
+volumes:
+  portainer_data:

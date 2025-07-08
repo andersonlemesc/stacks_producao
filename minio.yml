@@ -1,0 +1,128 @@
+version: "3.8"
+
+services:
+  # Serviço principal MinIO
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    
+    networks:
+      #- app_network      # Conecta com outras aplicações
+      - traefik_public   # Exposição via Traefik
+    
+    volumes:
+      - minio_data:/data
+    
+    environment:
+      # Credenciais root - ALTERE ESTAS SENHAS!
+      - MINIO_ROOT_USER=anderson
+      - MINIO_ROOT_PASSWORD=1:7khB-=3lZ7
+      
+      # URLs para integração com Traefik
+      - MINIO_SERVER_URL=https://files.seudominio.com
+      - MINIO_BROWSER_REDIRECT_URL=https://minio.seudominio.com
+      
+      # Configurações de performance e segurança
+      - MINIO_COMPRESSION_ENABLE=on
+      - MINIO_COMPRESSION_EXTENSIONS=.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx
+      - MINIO_COMPRESSION_MIME_TYPES=application/pdf,application/msword,application/vnd.ms-excel
+      
+      # Configurações de API
+      - MINIO_API_CORS_ALLOW_ORIGIN=https://chat.seudominio.com,https://files.seudominio.com,https://minio.seudominio.com,evo.seudominio.com
+      - MINIO_API_REQUESTS_MAX=1000
+      - MINIO_API_REQUESTS_DEADLINE=30s
+      
+      # Configurações de segurança
+      - MINIO_IDENTITY_OPENID_ENABLE=off
+      - MINIO_PROMETHEUS_AUTH_TYPE=public
+      
+      # Configurações de logging
+      - MINIO_LOG_QUERY_ENABLE=on
+      - MINIO_AUDIT_WEBHOOK_ENABLE=off
+      
+    command: server /data --console-address ":9001"
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      
+      placement:
+        constraints:
+          - node.role == manager
+          # Opcional: usar label específico para MinIO
+          # - node.labels.minio == true
+      
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+        #reservations:
+          #cpus: "0.5"
+          #memory: 512M
+      
+      # Labels para Traefik - API S3 (files.seudominio.com)
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=traefik_public
+        
+        # Router para API S3 (porta 9000)
+        - traefik.http.routers.minio-s3.rule=Host(`files.seudominio.com`)
+        - traefik.http.routers.minio-s3.entrypoints=websecure
+        - traefik.http.routers.minio-s3.tls.certresolver=letsencrypt
+        - traefik.http.routers.minio-s3.service=minio-s3
+        - traefik.http.services.minio-s3.loadbalancer.server.port=9000
+        
+        # Router para Console Web (porta 9001)
+        - traefik.http.routers.minio-console.rule=Host(`minio.seudominio.com`)
+        - traefik.http.routers.minio-console.entrypoints=websecure
+        - traefik.http.routers.minio-console.tls.certresolver=letsencrypt
+        - traefik.http.routers.minio-console.service=minio-console
+        - traefik.http.services.minio-console.loadbalancer.server.port=9001
+        
+        # Middleware para CORS e Headers de Segurança
+        - traefik.http.middlewares.minio-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+        - traefik.http.middlewares.minio-headers.headers.customrequestheaders.X-Forwarded-Port=443
+        - traefik.http.middlewares.minio-headers.headers.accesscontrolallowmethods=GET,OPTIONS,PUT,POST,DELETE
+        - traefik.http.middlewares.minio-headers.headers.accesscontrolallowheaders=*
+        - traefik.http.middlewares.minio-headers.headers.accesscontrolalloworiginlist=https://chat.seudominio.com,https://files.seudominio.com,https://minio.seudominio.com,evo.seudominio.com
+        - traefik.http.middlewares.minio-headers.headers.accesscontrolmaxage=100
+        - traefik.http.middlewares.minio-headers.headers.addvaryheader=true
+        
+        # Aplicar middleware em ambos os routers
+        - traefik.http.routers.minio-s3.middlewares=minio-headers
+        - traefik.http.routers.minio-console.middlewares=minio-headers
+      
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+        failure_action: rollback
+        monitor: 60s
+      
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
+    
+    # Healthcheck para MinIO
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  #app_network:
+    #external: true
+  traefik_public:
+    external: true
+
+volumes:
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/data/minio  # Diretório no host para persistência

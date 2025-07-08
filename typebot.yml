@@ -1,0 +1,156 @@
+version: "3.8"
+
+services:
+  typebot-builder:
+    image: baptistearno/typebot-builder:3.8
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    
+    networks:
+      - traefik_public      # Para exposição via Traefik
+      - app_network         # Para comunicação com PostgreSQL/Redis
+
+    
+    environment:
+
+      # Network binding - CRÍTICO para Docker
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      
+      # Database
+      - DATABASE_URL=postgresql://app_user:4hwM-An0+14dC=z@postgres:5432/typebot_database
+      
+      # Encryption (CRÍTICO - mude para um valor seguro)
+      - ENCRYPTION_SECRET=A+etXuevOpBgVwjATL1kEBScj1ALciYH
+
+      # Desativar novos cadastros
+      - DISABLE_SIGNUP:false
+      
+      # URLs principais
+      - NEXTAUTH_URL=https://builder.seudominio.com
+      - NEXT_PUBLIC_VIEWER_URL=https://viewer.seudominio.com
+      
+      # SMTP Google (configure com suas credenciais)
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_SECURE=false
+      - SMTP_USERNAME=seuemail@gmail.com
+      - SMTP_PASSWORD=psniysbjhlfrfeou
+      - NEXT_PUBLIC_SMTP_FROM=Typebot <seuemail@gmail.com>
+      - SMTP_AUTH_DISABLED=false
+      
+      # S3 Minio (ajuste conforme sua configuração)
+      - S3_ACCESS_KEY=vbPgNvelNqsYEQ1IWEyl
+      - S3_SECRET_KEY=1qIP0YthUVEUgePYuiu0b1MOq8NHeS4qWzDbEhnc
+      - S3_BUCKET=typebot
+      - S3_ENDPOINT=files.seudominio.com
+      - S3_PORT=9000
+      - S3_SSL=true
+      - S3_REGION=us-east-1
+      
+      # Configurações de plano (opcional)
+      - ADMIN_EMAIL=seuemail@gmail.com
+      - DEFAULT_WORKSPACE_PLAN=UNLIMITED
+      
+      # Node.js optimizations
+      - NODE_OPTIONS=--no-node-snapshot --max-old-space-size=2048
+      
+      # Performance (opcional)
+      - NEXT_PUBLIC_UPLOAD_SIZE_LIMIT=50
+   # Health check usando Node.js (sempre disponível)
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/api/health', (res) => { if(res.statusCode === 200) { process.exit(0); } else { process.exit(1); } }); req.on('error', () => process.exit(1)); req.setTimeout(5000, () => { req.destroy(); process.exit(1); });\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    
+    # Labels para Traefik
+    deploy:
+    
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik_public"
+        
+        # Builder service
+        - "traefik.http.services.typebot-builder.loadbalancer.server.port=3000"
+        - "traefik.http.routers.typebot-builder.rule=Host(`builder.seudominio.com`)"
+        - "traefik.http.routers.typebot-builder.tls=true"
+        - "traefik.http.routers.typebot-builder.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.typebot-builder.entrypoints=websecure"
+
+
+  typebot-viewer:
+    image: baptistearno/typebot-viewer:3.8
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    
+    networks:
+      - traefik_public      # Para exposição via Traefik
+      - app_network         # Para comunicação com PostgreSQL/Redis
+    
+    environment:
+      # Database (mesma do builder)
+      - DATABASE_URL=postgresql://app_user:4hwM-An0+14dC=z@postgres:5432/typebot_database
+
+       # Network binding - CRÍTICO para Docker
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+
+       # Desativas novos cadastros
+      - DISABLE_SIGNUP:false
+      
+      # Encryption (MESMO valor do builder)
+      - ENCRYPTION_SECRET=A+etXuevOpBgVwjATL1kEBScj1ALciYH
+      
+      # URLs principais
+      - NEXTAUTH_URL=https://builder.seudominio.com
+      - NEXT_PUBLIC_VIEWER_URL=https://viewer.seudominio.com
+      
+      # S3 Minio (mesmas configurações do builder)
+      - S3_ACCESS_KEY=vbPgNvelNqsYEQ1IWEyl
+      - S3_SECRET_KEY=1qIP0YthUVEUgePYuiu0b1MOq8NHeS4qWzDbEhnc
+      - S3_BUCKET=typebot
+      - S3_ENDPOINT=files.seudominio.com
+      - S3_PORT=9000
+      - S3_SSL=true
+      - S3_REGION=us-east-1
+      
+      # Node.js optimizations
+      - NODE_OPTIONS=--no-node-snapshot --max-old-space-size=1024
+      
+      # SMTP (para notificações se necessário)
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_SECURE=false
+      - SMTP_USERNAME=seuemail@gmail.com
+      - SMTP_PASSWORD=psniysbjhlfrfeou
+      - NEXT_PUBLIC_SMTP_FROM=Typebot <seuemail@gmail.com>
+      - SMTP_AUTH_DISABLED=false
+    
+    # Health check usando Node.js (sempre disponível)
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/api/health', (res) => { if(res.statusCode === 200) { process.exit(0); } else { process.exit(1); } }); req.on('error', () => process.exit(1)); req.setTimeout(5000, () => { req.destroy(); process.exit(1); });\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Labels para Traefik
+    deploy:
+    
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik_public"
+        
+        # Viewer service
+        - "traefik.http.services.typebot-viewer.loadbalancer.server.port=3000"
+        - "traefik.http.routers.typebot-viewer.rule=Host(`viewer.seudominio.com`)"
+        - "traefik.http.routers.typebot-viewer.tls=true"
+        - "traefik.http.routers.typebot-viewer.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.typebot-viewer.entrypoints=websecure"
+
+networks:
+  traefik_public:
+    external: true
+  app_network:
+    external: true

@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine  # Versão alpine (menor e mais segura)
+    
+    # Configurações otimizadas do Redis
+    command: >
+      redis-server
+      --port 6379
+      --appendonly no
+      --requirepass "J40geW0tC8VoaUqoZ"
+      --maxmemory 400mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --tcp-keepalive 300
+      --timeout 300
+      --tcp-backlog 511
+      --databases 16
+      --stop-writes-on-bgsave-error no
+      --dir /data
+      --lazyfree-lazy-eviction yes
+      --lazyfree-lazy-expire yes
+      --lazyfree-lazy-server-del yes
+      --replica-lazy-flush yes
+      --disable-thp yes
+      --protected-mode yes
+      --bind 0.0.0.0
+    
+    # Redes
+    networks:
+      - app_network  # Rede backend para aplicações
+    
+    # Volumes para persistência
+    volumes:
+      - redis_data:/data
+      # Script de limpeza comentado (pode não existir)
+      # - ./redis-cleanup.sh:/usr/local/bin/cleanup.sh:ro
+    
+    # Porta (comentada para produção)
+    # ports:
+      # - "6379:6379"  # Descomente apenas para debug
+    
+    # Configurações de deploy
+    deploy:
+      mode: replicated
+      replicas: 1
+      
+      # Recursos otimizados
+      resources:
+        limits:
+          cpus: '1.0'      # Máximo 1 CPU (Redis é single-threaded para comandos)
+          memory: 512M     # Máximo 512MB (ajuste conforme necessário)
+        #reservations:
+          #cpus: '0.5'      # Mínimo 0.5 CPU garantida
+          #memory: 256M     # Mínimo 256MB garantida
+      
+      # Placement
+      placement:
+        constraints:
+          - node.role == manager  # Preferencialmente em manager
+          # - node.labels.redis.data == true  # Opcional: node específico
+      
+      # Configurações de atualização
+      update_config:
+        parallelism: 1           # Um por vez
+        delay: 30s               # Aguarda 30s
+        order: stop-first        # Para o antigo primeiro
+        failure_action: rollback # Rollback se falhar
+        monitor: 60s             # Monitora por 60s
+      
+      # Política de restart
+      restart_policy:
+        condition: on-failure    # Só reinicia em falha
+        delay: 5s               # Delay menor para cache
+        max_attempts: 5         # Mais tentativas para serviço crítico
+        window: 120s            # Janela de 2 minutos
+      
+      # Labels para monitoramento (opcional)
+      labels:
+        - "service.name=redis"
+        - "service.type=cache"
+        - "environment=production"
+    
+    # Healthcheck robusto
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s      # Verifica a cada 30s
+      timeout: 10s       # Timeout de 10s
+      retries: 3         # 3 tentativas
+      start_period: 40s  # Aguarda 40s após start
+    
+    # Configurações de sistema (sysctls) - comentadas para compatibilidade
+    # sysctls:
+      # Otimizações para Redis
+      # - net.core.somaxconn=65535
+      # - vm.overcommit_memory=1
+    
+    # Limits de sistema - comentados para compatibilidade
+    # ulimits:
+      # memlock:
+        # soft: -1
+        # hard: -1
+      # nofile:
+        # soft: 65535
+        # hard: 65535
+    
+    # Configurações de log
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+        labels: "service,environment"
+
+# Redes
+networks:
+  app_network:
+    driver: overlay
+    external: true  # Deve ser criada antes
+
+# Volumes
+volumes:
+  redis_data:
+    # Opção 1: Named volume (simples, padrão)
+    driver: local
+  

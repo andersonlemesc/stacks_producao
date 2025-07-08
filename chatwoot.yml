@@ -1,0 +1,259 @@
+#command: bundle exec rails db:chatwoot_prepare
+version: "3.8"
+
+services:
+  # Serviço principal Rails do Chatwoot
+  chatwoot_rails:
+    image: chatwoot/chatwoot:v4.2.0
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    
+    networks:
+      - app_network      # Conecta com PostgreSQL/Redis
+      - traefik_public   # Exposição via Traefik
+    
+    #volumes:
+      #- chatwoot_storage:/app/storage
+    
+    environment:
+      # Node/Rails Environment
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+      
+      # Base configuration - ALTERE ESTA CHAVE!
+      - SECRET_KEY_BASE=194F83A5E420E2908213782FE1E64C2E7C07B5C3F7409BA90138E2D1E658BD77 
+      - FRONTEND_URL=https://chat.seudominio.com
+      - FORCE_SSL=true
+      - ENABLE_ACCOUNT_SIGNUP=false
+      
+      # Database configuration
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USERNAME=app_user
+      - POSTGRES_PASSWORD=4hwM-An0+14dC=z
+      - POSTGRES_DATABASE=chatwoot_database
+      - POSTGRES_PORT=5432
+      - POSTGRES_STATEMENT_TIMEOUT=14s
+      - RAILS_MAX_THREADS=5
+      
+      # Redis configuration
+      - REDIS_URL=redis://:J40geW0tC8VoaUqoZ@redis:6379
+      - REDIS_PASSWORD=J40geW0tC8VoaUqoZ
+
+       # Storage Local
+      #- ACTIVE_STORAGE_SERVICE: local
+
+      # Storage configuration (MinIO S3-compatible)
+      - ACTIVE_STORAGE_SERVICE=s3_compatible
+      - STORAGE_BUCKET_NAME=chatwoot
+      - STORAGE_ACCESS_KEY_ID=O2fjz7e74qdTIBtqaWnC
+      - STORAGE_SECRET_ACCESS_KEY=L97CdSr9kkRov2sBBOcX7oQe2T1K1JCCbQwhuPIX
+      - STORAGE_REGION=us-east-1
+      - STORAGE_ENDPOINT=http://minio:9000  # ✅ Acesso interno funciona
+      - STORAGE_FORCE_PATH_STYLE=true
+      - DIRECT_UPLOADS_ENABLED=false  # ✅ Arquivos passam pelo Chatwoot
+      
+      # Email configuration
+      - MAILER_SENDER_EMAIL=Chatwoot <seuemail@gmail.com>
+      - SMTP_DOMAIN=gmail.com
+      - SMTP_ADDRESS=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=seuemail@gmail.com
+      - SMTP_PASSWORD=edmoauhradsarvmw
+      - SMTP_AUTHENTICATION=login
+      - SMTP_ENABLE_STARTTLS_AUTO=true
+      - SMTP_OPENSSL_VERIFY_MODE=peer
+      - MAILER_INBOUND_EMAIL_DOMAIN=chat.seudominio.com
+      
+      # Security and performance
+      - RAILS_LOG_TO_STDOUT=true
+      - LOG_LEVEL=info
+      - LOG_SIZE=500
+      - ENABLE_RACK_ATTACK=true
+      - RACK_ATTACK_LIMIT=300
+      - ENABLE_RACK_ATTACK_WIDGET_API=true
+      
+      # Features
+      - ENABLE_PUSH_RELAY_SERVER=true
+      - IOS_APP_ID=L7YLMN4634.com.chatwoot.app
+      - ANDROID_BUNDLE_ID=com.chatwoot.app
+      - ANDROID_SHA256_CERT_FINGERPRINT=AC:73:8E:DE:EB:56:EA:CC:10:87:02:A7:65:37:7B:38:D4:5D:D4:53:F8:3B:FB:D3:C6:28:64:1D:AA:08:1E:D8
+      
+    entrypoint: docker/entrypoints/rails.sh
+    command: |
+      sh -c "bundle exec rails db:chatwoot_prepare &&
+             bundle exec rails s -p 3000 -b 0.0.0.0"
+          
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      
+      placement:
+        constraints:
+          - node.role == manager
+      
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        #reservations:
+          #cpus: "1.0"
+          #memory: 1024M
+      
+      # Labels para Traefik
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=traefik_public
+        
+        # Router principal
+        - traefik.http.routers.chatwoot.rule=Host(`chat.seudominio.com`)
+        - traefik.http.routers.chatwoot.entrypoints=websecure
+        - traefik.http.routers.chatwoot.tls.certresolver=letsencrypt
+        - traefik.http.services.chatwoot.loadbalancer.server.port=3000
+        
+        # Middleware para WebSocket e headers especiais
+        - traefik.http.middlewares.chatwoot-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+        - traefik.http.middlewares.chatwoot-headers.headers.customrequestheaders.X-Forwarded-Port=443
+        - traefik.http.routers.chatwoot.middlewares=chatwoot-headers
+      
+      update_config:
+        parallelism: 1
+        delay: 60s
+        order: stop-first
+        failure_action: rollback
+        monitor: 120s
+      
+      restart_policy:
+        condition: on-failure
+        delay: 15s
+        max_attempts: 3
+        window: 120s
+    
+    # Healthcheck para Rails
+    #healthcheck:
+      #test: ["CMD-SHELL", "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/', (res) => { if(res.statusCode === 200) { process.exit(0); } else { process.exit(1); } }); req.on('error', () => process.exit(1)); req.setTimeout(5000, () => { req.destroy(); process.exit(1); });\""]
+      #interval: 30s
+      #timeout: 10s
+      #retries: 3
+      #start_period: 200s
+  # Worker Sidekiq para processamento em background
+  chatwoot_sidekiq:
+    image: chatwoot/chatwoot:v4.2.0
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    
+    networks:
+      - app_network
+    
+    #volumes:
+      #- chatwoot_storage:/app/storage
+    
+    environment:
+      # Node/Rails Environment
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+      
+      # Base configuration - MESMA CHAVE DO RAILS!
+      - SECRET_KEY_BASE=194F83A5E420E2908213782FE1E64C2E7C07B5C3F7409BA90138E2D1E658BD77 
+      - FRONTEND_URL=https://chat.seudominio.com
+      - FORCE_SSL=false
+      - ENABLE_ACCOUNT_SIGNUP=false
+      
+      # Database configuration
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USERNAME=app_user
+      - POSTGRES_PASSWORD=4hwM-An0+14dC=z
+      - POSTGRES_DATABASE=chatwoot_database
+      - POSTGRES_PORT=5432
+      - POSTGRES_STATEMENT_TIMEOUT=14s
+      - RAILS_MAX_THREADS=5
+      
+      # Redis configuration
+      - REDIS_URL=redis://:J40geW0tC8VoaUqoZ@redis:6379
+      - REDIS_PASSWORD=J40geW0tC8VoaUqoZ
+
+      # Storage Local
+      #- ACTIVE_STORAGE_SERVICE: local
+
+      # Storage configuration (MinIO S3-compatible)
+      - ACTIVE_STORAGE_SERVICE=s3_compatible
+      - STORAGE_BUCKET_NAME=chatwoot
+      - STORAGE_ACCESS_KEY_ID=eYhkRBRjWk98pDuvf8K3
+      - STORAGE_SECRET_ACCESS_KEY=vgAdl0zKJkcs6DWLozM6NycSKJibbtxgL1pVsRl2
+      - STORAGE_REGION=us-east-1
+      - STORAGE_ENDPOINT=http://minio:9000  # ✅ Acesso interno funciona
+      - STORAGE_FORCE_PATH_STYLE=true
+      - DIRECT_UPLOADS_ENABLED=false  # ✅ Arquivos passam pelo Chatwoot
+      
+      # Email configuration
+      - MAILER_SENDER_EMAIL=Chatwoot <seuemail@gmail.com>
+      - SMTP_DOMAIN=gmail.com
+      - SMTP_ADDRESS=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=seuemail@gmail.com
+      - SMTP_PASSWORD=edmoauhradsarvmw
+      - SMTP_AUTHENTICATION=login
+      - SMTP_ENABLE_STARTTLS_AUTO=true
+      - SMTP_OPENSSL_VERIFY_MODE=peer
+      - MAILER_INBOUND_EMAIL_DOMAIN=chat.seudominio.com
+      
+      # Performance settings
+      - SIDEKIQ_CONCURRENCY=10
+      - RAILS_LOG_TO_STDOUT=true
+      - LOG_LEVEL=info
+      - LOG_SIZE=500
+      - ENABLE_RACK_ATTACK=true
+      - RACK_ATTACK_LIMIT=300
+      - ENABLE_RACK_ATTACK_WIDGET_API=true
+      
+      # Features
+      - ENABLE_PUSH_RELAY_SERVER=true
+      
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    
+    deploy:
+      mode: replicated
+      replicas: 1
+      
+      placement:
+        constraints:
+          - node.role == manager
+      
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1536M
+        #reservations:
+          #cpus: "0.5"
+          #memory: 768M
+      
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: stop-first
+        failure_action: rollback
+        monitor: 60s
+      
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
+    
+    # Healthcheck para Sidekiq
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep sidekiq | grep -v grep || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+networks:
+  app_network:
+    external: true
+  traefik_public:
+    external: true
+
+#volumes:
+  #chatwoot_storage:
+    #driver: local

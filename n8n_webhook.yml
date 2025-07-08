@@ -1,0 +1,144 @@
+version: "3.8"
+
+services:
+  n8n_webhook:
+    image: n8nio/n8n:1.101.1
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    command: webhook
+    
+    networks:
+      - app_network        # Conecta com PostgreSQL/Redis
+      - traefik_public     # Exposição via Traefik
+    
+    volumes:
+      # Compartilha dados com o editor
+      - n8n_data:/home/node/.n8n
+      - n8n_files:/files 
+    
+    environment:
+      
+      # Configurações Gerais do N8N - MESMAS DO EDITOR
+      
+      - N8N_ENCRYPTION_KEY=KRpMlPWMnUPpJ4Ehy6sHuYYweuLes4RT
+      - NODE_ENV=production
+      - N8N_LOG_LEVEL=info
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - N8N_RUNNERS_ENABLED=true
+      
+      
+      # Configuração do Banco de Dados - MESMAS DO EDITOR
+      
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=n8n_database
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=app_user
+      - DB_POSTGRESDB_PASSWORD=4hwM-An0+14dC=z
+      
+      
+      # Configuração do Redis - MESMAS DO EDITOR
+      
+      - EXECUTIONS_MODE=queue
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_DB=2
+      - QUEUE_BULL_REDIS_PASSWORD=1H9PvFRv1BAc
+      
+      
+      # Configuração do Webhook
+      
+      - N8N_PORT=5678
+      - N8N_HOST=editor.seudominio.com
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://workflow.seudominio.com/
+      - N8N_ENDPOINT_WEBHOOK=webhook
+      
+      
+      # Configurações específicas para Webhook
+      
+      - N8N_PAYLOAD_SIZE_MAX=64           # Webhooks podem receber payloads grandes
+      - EXECUTIONS_TIMEOUT=1800           # 30 minutos para webhooks
+      - EXECUTIONS_TIMEOUT_MAX=3600       # 1 hora máximo
+      
+      
+      # Bibliotecas - MESMAS DO EDITOR
+      
+      - NODE_FUNCTION_ALLOW_BUILTIN=*
+      - NODE_FUNCTION_ALLOW_EXTERNAL=lodash,moment,axios
+      - N8N_COMMUNITY_PACKAGES_ENABLED=true
+
+       # E-mail (Multi-user) - CONFIGURE SMTP
+      
+      - N8N_EMAIL_MODE=smtp
+      - N8N_SMTP_HOST=smtp.gmail.com
+      - N8N_SMTP_PORT=587
+      - N8N_SMTP_USER=seuemail@gmail.com
+      - N8N_SMTP_PASS=edmoauhradsarvmw
+      - N8N_SMTP_SENDER=seuemail@gmail.com
+      - N8N_SMTP_SSL=true
+      - N8N_SMTP_SECURE=true
+    
+    deploy:
+      mode: replicated
+      replicas: 2                        # 2 réplicas para alta disponibilidade
+      
+      placement:
+        constraints:
+          - node.role == manager
+      
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=traefik_public
+        
+        # Router para Webhook
+        - traefik.http.routers.n8n_webhook.rule=Host(`workflow.seudominio.com`)
+        - traefik.http.routers.n8n_webhook.entrypoints=websecure
+        - traefik.http.routers.n8n_webhook.tls.certresolver=letsencrypt
+        - traefik.http.routers.n8n_webhook.service=n8n_webhook
+        - traefik.http.services.n8n_webhook.loadbalancer.server.port=5678
+        - traefik.http.services.n8n_webhook.loadbalancer.passHostHeader=true
+        
+        # Middleware para webhooks (opcional)
+        # - traefik.http.routers.n8n_webhook.middlewares=webhook-ratelimit
+        # - traefik.http.middlewares.webhook-ratelimit.rateLimit.burst=100
+      
+      update_config:
+        parallelism: 1                   # Atualiza uma réplica por vez
+        delay: 30s
+        order: start-first               # Start-first para não perder webhooks
+        failure_action: rollback
+        monitor: 60s
+      
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
+    
+    # Healthcheck para webhook service
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5678/healthz || exit 1"]
+      interval: 30s                      # Mais frequente para webhooks
+      timeout: 10s
+      retries: 3
+      start_period: 60s                  # Webhooks iniciam mais rápido
+
+networks:
+  app_network:
+    external: true
+  traefik_public:
+    external: true
+
+volumes:
+  n8n_data:
+    driver: local
+  n8n_files:
+    driver: local
