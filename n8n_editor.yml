@@ -111,6 +111,7 @@ services:
       - N8N_SMTP_SSL=false
       - N8N_SMTP_SECURE=false
       - N8N_SMTP_TLS=true
+
     
     deploy:
       mode: replicated
