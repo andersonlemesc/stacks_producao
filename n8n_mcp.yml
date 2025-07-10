@@ -110,10 +110,11 @@ services:
       - N8N_SMTP_HOST=smtp.gmail.com
       - N8N_SMTP_PORT=587
       - N8N_SMTP_USER=seuemail@gmail.com
-      - N8N_SMTP_PASS=edmoauhradsarvmw
+      - N8N_SMTP_PASS=suasenha
       - N8N_SMTP_SENDER=seuemail@gmail.com
-      - N8N_SMTP_SSL=true
-      - N8N_SMTP_SECURE=true
+      - N8N_SMTP_SSL=false
+      - N8N_SMTP_SECURE=false
+      - N8N_SMTP_TLS=true
     
     deploy:
       mode: replicated
