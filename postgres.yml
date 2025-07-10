@@ -25,10 +25,11 @@ services:
     
     # Volumes para persistência
     volumes:
+      volumes:
       # Dados principais do PostgreSQL
       - postgres_data:/var/lib/postgresql/data
-      - postgres_extensions:/usr/local/lib/postgresql  # Bibliotecas compiladas
-      - postgres_extension_sql:/usr/local/share/postgresql/extension  # Scripts SQL
+      - postgres_lib:/usr/lib/postgresql/16/lib  # Bibliotecas compiladas
+      - postgres_extensions:/usr/share/postgresql/16/extension  # Scripts SQL
       
       # Backup local (opcional)
       # - /opt/postgres/backups:/backups
@@ -125,7 +126,7 @@ networks:
 volumes:
   postgres_data:
     driver: local
+  postgres_lib:  
+    driver: local
   postgres_extensions:
-    driver: local  
-  postgres_extension:
     driver: local
