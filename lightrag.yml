@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  lightrag2:
+    image: ghcr.io/hkuds/lightrag:latest
+    
+    environment:
+      # Configuração do banco PostgreSQL existente
+      LIGHTRAG_KV_STORAGE: PGKVStorage
+      LIGHTRAG_VECTOR_STORAGE: PGVectorStorage
+      LIGHTRAG_DOC_STATUS_STORAGE: PGDocStatusStorage  
+      LIGHTRAG_GRAPH_STORAGE: PGGraphStorage                 
+      
+      # ✅ VARIÁVEL PARA AGE
+      #AGE_GRAPH_NAME: "rag"
+      
+      POSTGRES_HOST: postgres2
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: "P4p=eb3-8&7bE"
+      POSTGRES_DATABASE: lightrag
+      POSTGRES_MAX_CONNECTIONS: 12
+      
+      # LLM/Embedding via OpenAI direto
+      LLM_BINDING: openai
+      LLM_MODEL: gpt-4o-mini
+      LLM_BINDING_API_KEY: "SUA_CHAVE_OPENAI_AQUI"
+      
+      EMBEDDING_BINDING: openai
+      EMBEDDING_MODEL: text-embedding-3-small
+      EMBEDDING_BINDING_API_KEY: "SUA_CHAVE_OPENAI_AQUI"
+      EMBEDDING_DIM: 1536
+      
+      # Autenticação completa
+      AUTH_ACCOUNTS: "admin:teste2025!"
+      TOKEN_SECRET: "ff379211da0f71cfbe43ea5d448c6bc2"
+      TOKEN_EXPIRE_HOURS: 24
+      
+      # API Key para automação/API
+      LIGHTRAG_API_KEY: "b9714901186877fe01b1d7cd81ad65d7"
+      
+      # Paths que NÃO precisam de login
+      WHITELIST_PATHS: "/health,/api/version"
+      
+      # Redis para cache
+      REDIS_URL: "redis://:J40geW0tC8VoaUqoZ@redis:6379/3"
+    
+    volumes:
+      - lightrag_data2:/app/data
+    
+    #ports:
+      #- "9621:9621"
+    
+    networks:
+      - app_network
+      - traefik_public
+    
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik_public"
+        
+        # Router principal
+        - "traefik.http.routers.lightrag2.rule=Host(`lightrag2.seudominio.com`)"
+        - "traefik.http.routers.lightrag2.entrypoints=websecure"
+        - "traefik.http.routers.lightrag2.tls.certresolver=letsencrypt"
+        - "traefik.http.services.lightrag2.loadbalancer.server.port=9621"
+        
+        # Middleware para seguir redirects
+        - "traefik.http.middlewares.lightrag2redirect.redirectregex.regex=^https://lightrag2.seudominio.com/$$"
+        - "traefik.http.middlewares.lightrag2redirect.redirectregex.replacement=https://lightrag2.seudominio.com/webui/"
+        
+       
+
+
+
+networks:
+  app_network:
+    driver: overlay
+    external: true
+  traefik_public:
+    external: true
+
+volumes:
+  lightrag_data2:
