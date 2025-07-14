@@ -3,11 +3,11 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
+  postgres2:
+    image: andersonlemes/pg16:v1.5.0
 
-    #ports:
-      #- 5432:5432 
+    ports:
+      - 5434:5432 
     
     # Configurações de ambiente
     environment:
@@ -25,11 +25,8 @@ services:
     
     # Volumes para persistência
     volumes:
-      volumes:
       # Dados principais do PostgreSQL
-      - postgres_data:/var/lib/postgresql/data
-      - postgres_lib:/usr/lib/postgresql/16/lib  # Bibliotecas compiladas
-      - postgres_extensions:/usr/share/postgresql/16/extension  # Scripts SQL
+      - postgres_data2:/var/lib/postgresql/data
       
       # Backup local (opcional)
       # - /opt/postgres/backups:/backups
@@ -50,8 +47,8 @@ services:
       # Recursos (ajuste conforme seu hardware)
       resources:
         limits:
-          cpus: '2.0'      # Máximo 2 CPUs
-          memory: 4G       # Máximo 4GB RAM
+          cpus: '1.0'      # Máximo 2 CPUs
+          memory: 2G       # Máximo 4GB RAM
         #reservations:
           #cpus: '1.0'      # Mínimo 1 CPU garantida
           #memory: 2G       # Mínimo 2GB RAM garantida
@@ -78,7 +75,7 @@ services:
     
     # Verificação de saúde
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app_user -d chatwoot_database"]
+      test: ["CMD-SHELL", "pg_isready -U app_user -d lightrag"]
       interval: 30s    # Verifica a cada 30 segundos
       timeout: 10s     # Timeout de 10 segundos
       retries: 3       # 3 tentativas antes de marcar como unhealthy
@@ -124,9 +121,6 @@ networks:
 
 # Volumes
 volumes:
-  postgres_data:
+  postgres_data2:
     driver: local
-  postgres_lib:  
-    driver: local
-  postgres_extensions:
-    driver: local
+ 
