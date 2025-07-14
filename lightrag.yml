@@ -80,8 +80,8 @@ services:
         - "traefik.http.services.lightrag2.loadbalancer.server.port=9621"
         
         # Middleware para seguir redirects
-        - "traefik.http.middlewares.lightrag2redirect.redirectregex.regex=^https://lightrag2.seudominio.com/$$"
-        - "traefik.http.middlewares.lightrag2redirect.redirectregex.replacement=https://lightrag2.seudominio.com/webui/"
+        - "traefik.http.middlewares.lightrag2-redirect.redirectregex.regex=^https://lightrag2.seudominio.com/$$"
+        - "traefik.http.middlewares.lightrag2-redirect.redirectregex.replacement=https://lightrag2.seudominio.com/webui/"
         
        
 

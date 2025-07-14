@@ -1,10 +1,8 @@
-#CREATE EXTENSION IF NOT EXISTS vector;
-
 version: '3.8'
 
 services:
   postgres2:
-    image: andersonlemes/pg16:v1.5.0
+    image: andersonlemes/pg16:v1.5.0 #imagem disponivel caso queira usar
 
     ports:
       - 5434:5432 
@@ -30,10 +28,6 @@ services:
       
       # Backup local (opcional)
       # - /opt/postgres/backups:/backups
-    
-    # Porta (comentada para produção - usar via rede interna)
-    # ports:
-      # - "5432:5432"  # Descomente apenas para debug/desenvolvimento
     
     # Redes
     networks:
