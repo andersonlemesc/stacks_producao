@@ -19,10 +19,11 @@ services:
     volumes:
       - portainer_data:/data
     ports:
-      #- "9000:9000"  # Descomente para acesso direto HTTP
+       - "9000:9000"  # Descomente para acesso direto HTTP
        - "9443:9443"  # Descomente para acesso direto HTTPS
     networks:
       - traefik_public
+      - app_network
     deploy:
       mode: replicated
       replicas: 1
