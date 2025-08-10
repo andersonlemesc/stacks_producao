@@ -40,7 +40,7 @@ services:
       - REDIS_PASSWORD=J40geW0tC8VoaUqoZ
 
        # Storage Local
-      #- ACTIVE_STORAGE_SERVICE: local
+      #- ACTIVE_STORAGE_SERVICE=local
 
       # Storage configuration (MinIO S3-compatible)
       - ACTIVE_STORAGE_SERVICE=s3_compatible
@@ -173,7 +173,7 @@ services:
       - REDIS_PASSWORD=J40geW0tC8VoaUqoZ
 
       # Storage Local
-      #- ACTIVE_STORAGE_SERVICE: local
+      #- ACTIVE_STORAGE_SERVICE=local
 
       # Storage configuration (MinIO S3-compatible)
       - ACTIVE_STORAGE_SERVICE=s3_compatible
