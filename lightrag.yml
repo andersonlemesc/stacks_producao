@@ -71,7 +71,7 @@ services:
         
       labels:
         - "traefik.enable=true"
-        - "traefik.swarm.network=traefik_public"
+        - "traefik.docker.network=traefik_public"
         
         # Router principal
         - "traefik.http.routers.lightrag2.rule=Host(`lightrag2.seudominio.com`)"
