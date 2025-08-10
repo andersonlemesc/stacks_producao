@@ -179,7 +179,7 @@ services:
       
       labels:
         - "traefik.enable=true"
-        - "traefik.docker.network=traefik_public"
+        - "traefik.swarm.network=traefik_public"
         
         # Evolution API service
         - "traefik.http.services.evolution-v2.loadbalancer.server.port=8080"
